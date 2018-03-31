@@ -24,8 +24,6 @@ private:
     /** In this mode there is only one control defined for this channel. 
      * The full value from the correspponding LSDJ command will be used with this control.*/
     ChannelCCModeSingle = 0,
-
-    /** In this mode there are 
     ChannelCCModeScaled
   };
 
@@ -282,9 +280,10 @@ public:
           midiOut.write(0xC0 | channelConfig.midiChannel);
           midiOut.write(data);
           break;
-        }
+      }
+        
+      led::clear();
     }
-    led::clear();
   }
 };
 
@@ -306,7 +305,7 @@ class LED {
 
   static void update() {
     Self& self = getSelf();
-    pinLED::write((self.toggleState > 0) ^ (self.blinkState));
+    pinLED::write((self.toggleState > 0) ^ self.blinkState);
   }  
 
 public:
