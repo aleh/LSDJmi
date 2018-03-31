@@ -7,6 +7,7 @@
 //
 
 #include <a21.hpp>
+#include <avr/eeprom.h>
 
 using namespace a21;
 
@@ -318,7 +319,7 @@ public:
     Self& self = getSelf();
     self.nextBlinkTime = millis();
     self.blinkState = false;
-    self.toggleState = false;
+    self.toggleState = 0;
     check();
   }
   
@@ -381,12 +382,24 @@ typedef LED< FastPin<2> > led;
 //
 LSDJmi< FastPin<4>, FastPin<3>, FastPin<1>, led > mi;
 
+bool readCalibrationByte(uint8_t& b) {
+  b = eeprom_read_byte((uint8_t*)0);
+  return b == (uint8_t)(~eeprom_read_byte((uint8_t*)1));
+}
+
 void setup() {
 
-  // If you use your microcontroler without a crystal, like I do with an ATtiny85, then you'll need to use your calibration byte. 
-  // I am putting mine here for simplicity, you can read yours from EEPROM instead.
+  // If you use your microcontroler without a crystal, like I do with an ATtiny85, then you'll need to use your calibration byte.
+  // Here I assume it is stored in EEPROM at address 0 by a calibration f/w, but this can be different in your setup.
+  uint8_t calibrationByte;
+  if (readCalibrationByte(calibrationByte)) {
+    OSCCAL = calibrationByte;
+  } else {
+    // Alternatively you can manually find a suitable value and hardcode it.
+    OSCCAL = 0xEF;
+  }
   OSCCAL = 0xEF;
-  
+    
   mi.begin();
 }
 
