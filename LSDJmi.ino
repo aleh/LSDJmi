@@ -208,58 +208,31 @@ public:
 
   // Invalid MIDI CC number to use 'no value' instead of 0 (since 0 can be the actual CC number).
   const uint8_t NoCC = 0xFF;
-
-  /** CC numbers of KORG monologue, so it's easier to hardcode an example config below. */
-  enum KorgCC : uint8_t {
-    KorgEGAttack = 16,
-    KorgEGDecay = 17,
-    KorgEGInt = 25,
-    KorgLFORate = 24,
-    KorgLFODepth = 26,
-    KorgDrive = 28,
-    KorgPitchVCO2 = 35,
-    KorgShapeVCO1 = 36,
-    KorgShapeVCO2 = 37,
-    KorgLevelVCO1 = 39,
-    KorgLevelVCO2 = 40,
-    KorgCutoff = 43,
-    KorgResonance = 44,
-    KorgOctaveVCO2 = 49,
-    KorgWaveVCO1 = 50,
-    KorgWaveVCO2 = 51,
-    KorgLFOTarget = 56,
-    KorgLFOWave = 58,
-    KorgLFOMode = 59,
-    KorgSyncRing = 60,
-    KorgEGType = 61,
-    KorgEGTarget = 62
-  };
-
+  
   LSDJmi()
-    // Example of a default config.
     : channels({
       {
         .midiChannel = 0,
-        .ccMode = ChannelCCModeScaled,
-        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .ccMode = ChannelCCModeSingle,
+        .ccNumbers = { NoCC, NoCC, NoCC, NoCC, NoCC, NoCC, NoCC },
         .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .ccNumbers = { NoCC, NoCC, NoCC, NoCC, NoCC, NoCC, NoCC },
         .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .ccNumbers = { NoCC, NoCC, NoCC, NoCC, NoCC, NoCC, NoCC },
         .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .ccNumbers = { NoCC, NoCC, NoCC, NoCC, NoCC, NoCC, NoCC },
         .velocity = 0x3F
       },
     }),
@@ -353,7 +326,7 @@ public:
             
             midiOut.write(0x90 | channelConfig.midiChannel);
             midiOut.write(data);
-            midiOut.write(channelConfig.velocity);
+            midiOut.write((uint16_t)channelConfig.velocity * 0x7F / 0x6F);
           }
           break;
         
