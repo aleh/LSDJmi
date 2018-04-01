@@ -21,7 +21,27 @@ The "Arduinoboy" build of LSDJ supports the following extra commands (you can fi
 
 These commands are received by the dongle from the Link port and the corresponding MIDI messages are generated on the MIDI out port of the dongle.
 
-[TODO: describe MIDI channel and CC map settings]
+(Note that because of the communication protocol the `xx` argument in all the commands above should be in the range 00-6F.)
+
+## Configuration
+
+Each Gameboy channel has the following settings associated with it on the dongle side:
+
+ - the MIDI channel to use for CC, PC and notes coming from this channel (hardcoded);
+ - the velocity for every note being sent (not implemented, always 0x7F);
+ - the mode CC commands (**X**`xx`) are interpreted (hardcoded):
+    - in the **single** mode there is only one control associated with the Gameboy channel, so the value from any **X**`xx` command will be translated from the command's 00-6F range into MIDI's 00-7F and sent to the associated control;
+    - in the **scaled** mode there can be up to 7 controls associated with the Gameboy channel, the first nibble of the argument to **X**`xx` command is interpreted as the index of the control (0-6) and the second one will be scaled from 0-F range into MIDI's 00-7F.
+
+Currently the configuration can be changed only by recompiling the firmware. Arduinoboy allows to change its configuration via special messages on its MIDI in sent by a dedicated tool. For LSDJmi I would like to implement the following:
+
+Unlike Arduinoboy the `Y6F` command is not treated as Program Change to 111, but instructs LSDJmi to treat the following **X**`xx` commands as configuration changes:
+ - **X**`mc` defines the MIDI channel by its `c` nibble, and defines how many CCs should be associated with the channel via `m`:
+   - 0 means no changes in the current config;
+   - 1 selects the 'single' CC mode with the following single **X**`xx` command defining the MIDI CC number;
+   - 2-7 selects the 'scaled' CC mode, and the following `m` **X**`xx` commands define the MIDI CC numbers to associate with the numbers in the high nibble of the **X**`xx` command.
+ - the next 0-7 **X**`cc` commands define MIDI CC numbers to use (depends on the mode, see above);
+ - the last **X**`vv` command defines the default velocity of every note on this Gameboy channel.
 
 ## Schematics
 

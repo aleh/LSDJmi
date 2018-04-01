@@ -22,24 +22,30 @@ private:
   /** CC messages can be treated differently depending on the settings of the current channel. */
   enum ChannelCCMode : uint8_t {
     
-    /** In this mode there is only one control defined for this channel. 
-     * The full value from the correspponding LSDJ command will be used with this control.*/
+    /** In this mode there is a single  CC associated with a Gameboy channel. 
+     * The value of the X command will be scaled from 00-6F to 00-7F range of the control's value. */
     ChannelCCModeSingle = 0,
+
+    /** In this mode the first nibble of the X command argument selects one of 7 CCs associated with a Gameboy.
+     * The second nibble is scaled from 0-F range to 00-7F range of the control's value. */
     ChannelCCModeScaled
   };
 
   /** Runtime settings per Gameboy channel. */
   struct ChannelConfig {
     
-    // MIDI channel used for all commands in this Gameboy channel.
+    // MIDI channel that should be used for all MIDI messages trigerred by LSDJ commands in this Gameboy channel.
     uint8_t midiChannel;
 
     // How to treat CC messages for this channel.
     ChannelCCMode ccMode;
 
-    // If ccMode is 'single', then this is the single CC number to use for all the CC commands in this channel.
-    uint8_t ccNumber;
+    // The CC number associated with this channel in the 'single' mode.
+    uint8_t singleCCNumber;
 
+    // 'Scaled' mode CC numbers, 0-6.
+    uint8_t scaledCCNumbers[7];
+    
     // The most recent note we've triggered from this channel.
     uint8_t currentNote;    
   };
@@ -157,13 +163,60 @@ private:
 
 public:
 
-  LSDJmi() {
-    for (uint8_t channel = LSDJChannelPU1; channel <= LSDJChannelNOI; channel++) {
-      ChannelConfig& channelConfig = channels[channel];
-      channelConfig.midiChannel = 0;
-      channelConfig.ccMode = ChannelCCModeSingle;
-      channelConfig.ccNumber = 43;
-    }
+  /** CC numbers of KORG monologue, so it's easier to hardcode an example config below. */
+  enum KorgCC : uint8_t {
+    KorgEGAttack = 16,
+    KorgEGDecay = 17,
+    KorgEGInt = 25,
+    KorgLFORate = 24,
+    KorgLFODepth = 26,
+    KorgDrive = 28,
+    KorgPitchVCO2 = 35,
+    KorgShapeVCO1 = 36,
+    KorgShapeVCO2 = 37,
+    KorgLevelVCO1 = 39,
+    KorgLevelVCO2 = 40,
+    KorgCutoff = 43,
+    KorgResonance = 44,
+    KorgOctaveVCO2 = 49,
+    KorgWaveVCO1 = 50,
+    KorgWaveVCO2 = 51,
+    KorgLFOTarget = 56,
+    KorgLFOWave = 58,
+    KorgLFOMode = 59,
+    KorgSyncRing = 60,
+    KorgEGType = 61,
+    KorgEGTarget = 62
+  };
+
+  LSDJmi()
+    // Example of a default config.
+    : channels({
+      {
+        .midiChannel = 0,
+        .ccMode = ChannelCCModeScaled,
+        .singleCCNumber = KorgCutoff,
+        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+      },
+      {
+        .midiChannel = 0,
+        .ccMode = ChannelCCModeSingle, 
+        .singleCCNumber = KorgEGDecay,
+        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+      },
+      {
+        .midiChannel = 0,
+        .ccMode = ChannelCCModeSingle, 
+        .singleCCNumber = KorgDrive,
+        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+      },
+      {
+        .midiChannel = 0,
+        .ccMode = ChannelCCModeSingle, 
+        .singleCCNumber = KorgLFODepth,
+        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+      },
+    }) {
   }
 
   void begin() {
@@ -264,13 +317,17 @@ public:
           
           switch (channelConfig.ccMode) {
           case ChannelCCModeSingle:
-            value = data * (int)0x7F / 0x6F;
-            ccNumber = channelConfig.ccNumber;
+            value = (uint16_t)data * 0x7F / 0x6F;
+            ccNumber = channelConfig.singleCCNumber;
+            break;
+          case ChannelCCModeScaled:
+            value = (uint16_t)(data & 0x0F) * 0x7F / 0xF;
+            ccNumber = channelConfig.scaledCCNumbers[(data >> 4) & 0x0F];
             break;
           }
           
           midiOut.write(0xB0 | channelConfig.midiChannel);
-          midiOut.write(channelConfig.ccNumber);
+          midiOut.write(ccNumber);
           midiOut.write(value);
           
           break;
