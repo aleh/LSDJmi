@@ -31,7 +31,7 @@ private:
     ChannelCCModeScaled
   };
 
-  /** Runtime settings per Gameboy channel. */
+  /** Settings per Gameboy channel adjustable at run time by the user. */
   struct ChannelConfig {
     
     // MIDI channel that should be used for all MIDI messages trigerred by LSDJ commands in this Gameboy channel.
@@ -46,14 +46,45 @@ private:
 
     // Default MIDI velocity for the notes in this channel.
     uint8_t velocity;
-    
-    // The most recent note we've triggered from this channel.
-    uint8_t currentNote;
   };
-
-  // Info for all our channels.
+  
+  // User-adjustable settings per Gameboy channel, like what MIDI channel to use, etc. 
   ChannelConfig channels[4];
 
+  /** In case we receive Gameboy channel config changes, then we need to keep track of what's coming next; these are the possibilities. */
+  enum ChannelConfigState : uint8_t {
+    // Not in the channel config mode at the moment.
+    ChannelConfigStateIdle = 0,
+    // Just got a channel config start command, waiting for the first CC mode and MIDI channel command.
+    ChannelConfigStateCCModeAndMIDIChannel,
+    // Expect one or more definitions of MIDI CCs.
+    ChannelConfigStateCC1,
+    ChannelConfigStateCC2,
+    ChannelConfigStateCC3,
+    ChannelConfigStateCC4,
+    ChannelConfigStateCC5,
+    ChannelConfigStateCC6,
+    ChannelConfigStateCC7,
+    // Expecting the default note velocity.
+    ChannelConfigStateVelocity
+  };
+
+  /** State info we store per channel. */
+  struct ChannelState {
+    
+    // The most recent note we've triggered from this channel.
+    uint8_t currentNote;    
+
+    // In case the user has just started configuring the channel, then here we keep track of the commands to expect.
+    ChannelConfigState configState;
+
+    // The total number of CC numbers we expect to receive.
+    uint8_t configStateTotalCCs;
+  };
+
+  // Our own per channel runtime state.
+  ChannelState channelStates[4];
+  
   static bool readByte(uint8_t& b) {
   
     b = 0;
@@ -144,21 +175,32 @@ private:
 
   void stopCurrentNote(LSDJChannel channel) {
 
-    ChannelConfig& channelConfig = channels[channel];
+    ChannelState& channelState = channelStates[channel];
     
-    if (channelConfig.currentNote) {              
+    if (channelState.currentNote) {              
       
+      ChannelConfig& channelConfig = channels[channel];
       midiOut.write(0x80 | channelConfig.midiChannel);
-      midiOut.write(channelConfig.currentNote);
+      midiOut.write(channelState.currentNote);
       midiOut.write(0x40);
       
-      channelConfig.currentNote = 0;
+      channelState.currentNote = 0;
+    }
+  }
+
+  void resetConfigState(LSDJChannel channel) {
+    ChannelState& channelState = channelStates[channel];
+    if (channelState.configState != ChannelConfigStateIdle) {
+      channelState.configState = ChannelConfigStateIdle;
+      led::clear();
     }
   }
 
   void stopAllNotes() {
+    
     for (uint8_t channel = LSDJChannelPU1; channel <= LSDJChannelNOI; channel++) {
       stopCurrentNote((LSDJChannel)channel);
+      resetConfigState((LSDJChannel)channel);
     }
   }
 
@@ -220,7 +262,8 @@ public:
         .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
         .velocity = 0x3F
       },
-    }) 
+    }),
+    channelStates({{0},{0},{0},{0}})
   {
   }
 
@@ -292,6 +335,7 @@ public:
       led::set();      
 
       ChannelConfig& channelConfig = channels[channel];
+      ChannelState& channelState = channelStates[channel];
 
       switch (command) {
         
@@ -299,11 +343,13 @@ public:
         
           // Note on/off.
 
+          resetConfigState(channel);
+
           stopCurrentNote(channel);
 
           if (data != 0) {
             
-            channelConfig.currentNote = data;
+            channelState.currentNote = data;
             
             midiOut.write(0x90 | channelConfig.midiChannel);
             midiOut.write(data);
@@ -312,35 +358,106 @@ public:
           break;
         
         case LSDJCommandX:
-    
-          // Control Change (CC)          
-          uint8_t value;
-          uint8_t ccNumber;
-          
-          switch (channelConfig.ccMode) {
-          case ChannelCCModeSingle:
-            value = (uint16_t)data * 0x7F / 0x6F;
-            ccNumber = channelConfig.ccNumbers[0];
-            break;
-          case ChannelCCModeScaled:
-            value = (uint16_t)(data & 0x0F) * 0x7F / 0xF;
-            ccNumber = channelConfig.ccNumbers[(data >> 4) & 0x0F];
-            break;
-          }
 
-          if (ccNumber != NoCC) {
-            midiOut.write(0xB0 | channelConfig.midiChannel);
-            midiOut.write(ccNumber);
-            midiOut.write(value);
-          }          
+          // Control Change (CC)
+
+          switch (channelState.configState) {
+
+            // Not in the channel config mode, just a normal CC.
+            case ChannelConfigStateIdle:
+              {
+                uint8_t value;
+                uint8_t ccNumber;
+                
+                switch (channelConfig.ccMode) {
+                case ChannelCCModeSingle:
+                  value = (uint16_t)data * 0x7F / 0x6F;
+                  ccNumber = channelConfig.ccNumbers[0];
+                  break;
+                case ChannelCCModeScaled:
+                  value = (uint16_t)(data & 0x0F) * 0x7F / 0xF;
+                  ccNumber = channelConfig.ccNumbers[(data >> 4) & 0x0F];
+                  break;
+                }
+      
+                if (ccNumber != NoCC) {
+                  midiOut.write(0xB0 | channelConfig.midiChannel);
+                  midiOut.write(ccNumber);
+                  midiOut.write(value);
+                }          
+              }
+              break;
+
+            case ChannelConfigStateCCModeAndMIDIChannel:            
+              {
+                uint8_t newMIDIChannel = (data & 0xF);
+                if (channelConfig.midiChannel != newMIDIChannel) {
+                  // Let's make sure we have everything stopped in the old MIDI channel if it's changing.
+                  stopCurrentNote(channel);
+                  channelConfig.midiChannel = newMIDIChannel;
+                }
+                
+                // Number of CC configStateTotalCCs to expect.
+                channelState.configStateTotalCCs = (data >> 4) & 0xF;
+
+                // Reset the current CC map so any commands still referring them won't produce unexpected results.
+                for (uint8_t i = 0; i < 7; i++) {
+                  channelConfig.ccNumbers[i] = NoCC;
+                }
+
+                if (channelState.configStateTotalCCs > 0) {
+                  channelConfig.ccMode = (channelState.configStateTotalCCs == 1) ? ChannelCCModeSingle : ChannelCCModeScaled;
+                  channelState.configState = (ChannelConfigState)(ChannelConfigStateCC1 + channelState.configStateTotalCCs - 1);
+                } else {
+                  // If no CCs is expected, then jump into the next state whatever it is.
+                  channelState.configState = (ChannelConfigState)(ChannelConfigStateCC7 + 1);
+                }
+              }
+              break;
+              
+              case ChannelConfigStateCC1:
+              case ChannelConfigStateCC2:
+              case ChannelConfigStateCC3:
+              case ChannelConfigStateCC4:
+              case ChannelConfigStateCC5:
+              case ChannelConfigStateCC6:
+              case ChannelConfigStateCC7:
+                {
+                  uint8_t left = channelState.configState - ChannelConfigStateCC1;
+                  channelConfig.ccNumbers[channelState.configStateTotalCCs - 1 - left] = data;
+                  if (left > 0) {
+                    channelState.configState = (ChannelConfigState)(channelState.configState - 1);
+                  } else {
+                    channelState.configState = ChannelConfigStateVelocity;
+                  }
+                }
+              break;
+            
+            case ChannelConfigStateVelocity:
+              channelConfig.velocity = data;
+              resetConfigState(channel);
+              break;
+          }
+    
           break;
         
         case LSDJCommandY:
-    
-          // Program Change
-          midiOut.write(0xC0 | channelConfig.midiChannel);
-          midiOut.write(data);
-          break;
+
+          resetConfigState(channel);
+
+          if (data == 0x6F) {
+
+            // Special patch number, treating it as "enter channel configuration mode".
+            channelState.configState = ChannelConfigStateCCModeAndMIDIChannel;
+            led::set();
+            
+          } else {
+            
+            // Program Change
+            midiOut.write(0xC0 | channelConfig.midiChannel);
+            midiOut.write(data);
+            break;
+          }
       }
         
       led::clear();

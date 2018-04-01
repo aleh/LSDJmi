@@ -1,8 +1,8 @@
 # LSDJmi
 
-This is the firmware for a little dongle providing MIDI out interface for the "Arduinoboy" version of LSDJ.
+**Project status:** completed.
 
-**Project status:** usable but missing support for CC/channel configuration directly from LSDJ.
+This is the firmware for a little dongle providing MIDI out interface for the "Arduinoboy" version of LSDJ.
 
 The actual [Arduinoboy](https://github.com/trash80/Arduinoboy) by **trash80** supports other Gameboy programs and more modes of operation. Check it out.
 
@@ -27,20 +27,28 @@ These commands are received by the dongle from the Link port and the correspondi
 
 Each Gameboy channel has the following settings associated with it on the dongle side:
 
- - the MIDI channel to use for CC, PC and notes coming from this channel;
+ - the MIDI channel to use for CC, PC and notes coming from this Gameboy channel;
  - the velocity for every note being sent;
  - the mode CC commands (**X**`xx`) are interpreted:
-    - in the **single** mode there is only one control associated with the Gameboy channel, so the value from any **X**`xx` command will be translated from the command's 00-6F range into MIDI's 00-7F and sent to the associated control;
-    - in the **scaled** mode there can be up to 7 controls associated with the Gameboy channel, the first nibble of the argument to **X**`xx` command is interpreted as the index of the control (0-6) and the second one will be scaled from 0-F range into MIDI's 00-7F.
+ 
+   - in the **single** mode there is only one control associated with the Gameboy channel, so the value from any **X**`xx` command will be translated from the command's 00-6F range into MIDI's 00-7F and sent to the associated MIDI CC;
+    
+   - in the **scaled** mode there can be up to 7 controls associated with the Gameboy channel; the first nibble of the argument to **X**`xx` command is interpreted as the index of the control (0-6) and the second one will be scaled from 0-F range into MIDI's 00-7F.
 
-Currently the configuration can be changed only by recompiling the firmware. Arduinoboy allows to change its configuration via special messages on its MIDI in sent by a dedicated tool. For LSDJmi I would like to implement the following:
+Arduinoboy allows to change its configuration via special messages on its MIDI in input sent by a dedicated tool. LSDJmi however can be configured from the Gameboy itself:
 
-Unlike Arduinoboy the `Y6F` command is not treated as Program Change to 111, but instructs LSDJmi to treat the following **X**`xx` commands as configuration changes:
+The `Y6F` command is not treated as Program Change to 111 but instructs LSDJmi to treat the following **X**`xx` commands as configuration changes:
+
  - **X**`mc` defines the MIDI channel by its `c` nibble, and defines how many CCs should be associated with the channel via `m`:
-   - 0 means no changes in the current config;
+ 
+   - 0 means no changes in the current CC config;
+   
    - 1 selects the 'single' CC mode with the following single **X**`xx` command defining the MIDI CC number;
+   
    - 2-7 selects the 'scaled' CC mode, and the following `m` **X**`xx` commands define the MIDI CC numbers to associate with the numbers in the high nibble of the **X**`xx` command.
+   
  - the next 0-7 **X**`cc` commands define MIDI CC numbers to use (depends on the mode, see above);
+ 
  - the last **X**`vv` command defines the default velocity of every note on this Gameboy channel.
 
 ## Schematics
