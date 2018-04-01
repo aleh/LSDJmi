@@ -40,14 +40,15 @@ private:
     // How to treat CC messages for this channel.
     ChannelCCMode ccMode;
 
-    // The CC number associated with this channel in the 'single' mode.
-    uint8_t singleCCNumber;
+    // In the 'single' mode only the first element is used as a CC number for any Xnn command.
+    // In the 'scaled' CC mode however these are MIDI CC numbers to associate with the high nibble in Xnn command.
+    uint8_t ccNumbers[7];
 
-    // 'Scaled' mode CC numbers, 0-6.
-    uint8_t scaledCCNumbers[7];
+    // Default MIDI velocity for the notes in this channel.
+    uint8_t velocity;
     
     // The most recent note we've triggered from this channel.
-    uint8_t currentNote;    
+    uint8_t currentNote;
   };
 
   // Info for all our channels.
@@ -163,6 +164,9 @@ private:
 
 public:
 
+  // Invalid MIDI CC number to use 'no value' instead of 0 (since 0 can be the actual CC number).
+  const uint8_t NoCC = 0xFF;
+
   /** CC numbers of KORG monologue, so it's easier to hardcode an example config below. */
   enum KorgCC : uint8_t {
     KorgEGAttack = 16,
@@ -195,28 +199,29 @@ public:
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeScaled,
-        .singleCCNumber = KorgCutoff,
-        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .singleCCNumber = KorgEGDecay,
-        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .singleCCNumber = KorgDrive,
-        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .velocity = 0x3F
       },
       {
         .midiChannel = 0,
         .ccMode = ChannelCCModeSingle, 
-        .singleCCNumber = KorgLFODepth,
-        .scaledCCNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  } 
+        .ccNumbers = { KorgCutoff, KorgResonance, KorgEGAttack, KorgEGDecay, KorgDrive, KorgLFORate, KorgLFODepth  },
+        .velocity = 0x3F
       },
-    }) {
+    }) 
+  {
   }
 
   void begin() {
@@ -294,9 +299,6 @@ public:
         
           // Note on/off.
 
-          //~ Serial.print("note ");
-          //~ Serial.println(data);    
-
           stopCurrentNote(channel);
 
           if (data != 0) {
@@ -305,7 +307,7 @@ public:
             
             midiOut.write(0x90 | channelConfig.midiChannel);
             midiOut.write(data);
-            midiOut.write(0x7F);            
+            midiOut.write(channelConfig.velocity);
           }
           break;
         
@@ -318,18 +320,19 @@ public:
           switch (channelConfig.ccMode) {
           case ChannelCCModeSingle:
             value = (uint16_t)data * 0x7F / 0x6F;
-            ccNumber = channelConfig.singleCCNumber;
+            ccNumber = channelConfig.ccNumbers[0];
             break;
           case ChannelCCModeScaled:
             value = (uint16_t)(data & 0x0F) * 0x7F / 0xF;
-            ccNumber = channelConfig.scaledCCNumbers[(data >> 4) & 0x0F];
+            ccNumber = channelConfig.ccNumbers[(data >> 4) & 0x0F];
             break;
           }
-          
-          midiOut.write(0xB0 | channelConfig.midiChannel);
-          midiOut.write(ccNumber);
-          midiOut.write(value);
-          
+
+          if (ccNumber != NoCC) {
+            midiOut.write(0xB0 | channelConfig.midiChannel);
+            midiOut.write(ccNumber);
+            midiOut.write(value);
+          }          
           break;
         
         case LSDJCommandY:

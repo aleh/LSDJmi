@@ -1,8 +1,8 @@
 # LSDJmi
 
-This is the firmware for a little dongle providing MIDI out interface for "Arduinoboy" version of LSDJ.
+This is the firmware for a little dongle providing MIDI out interface for the "Arduinoboy" version of LSDJ.
 
-**Project status:** usable but missing support for scaled CC and CC/channel configuration directly from LSDJ.
+**Project status:** usable but missing support for CC/channel configuration directly from LSDJ.
 
 The actual [Arduinoboy](https://github.com/trash80/Arduinoboy) by **trash80** supports other Gameboy programs and more modes of operation. Check it out.
 
@@ -27,9 +27,9 @@ These commands are received by the dongle from the Link port and the correspondi
 
 Each Gameboy channel has the following settings associated with it on the dongle side:
 
- - the MIDI channel to use for CC, PC and notes coming from this channel (hardcoded);
- - the velocity for every note being sent (not implemented, always 0x7F);
- - the mode CC commands (**X**`xx`) are interpreted (hardcoded):
+ - the MIDI channel to use for CC, PC and notes coming from this channel;
+ - the velocity for every note being sent;
+ - the mode CC commands (**X**`xx`) are interpreted:
     - in the **single** mode there is only one control associated with the Gameboy channel, so the value from any **X**`xx` command will be translated from the command's 00-6F range into MIDI's 00-7F and sent to the associated control;
     - in the **scaled** mode there can be up to 7 controls associated with the Gameboy channel, the first nibble of the argument to **X**`xx` command is interpreted as the index of the control (0-6) and the second one will be scaled from 0-F range into MIDI's 00-7F.
 
