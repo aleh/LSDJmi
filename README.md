@@ -14,10 +14,10 @@ Unlike Arduinoboy LSDJmi is configurable directly from LSDJ which allows to have
 
 The "Arduinoboy" build of LSDJ (you can download it where you got your copy of LSDJ) supports the following extra commands (you can find them after the standard **Z** command):
 
- - **N**`xx` - send an arbitrary MIDI note `xx`.
- - **Q**`xx` - send a note corresponding to the pitch in the current Gameboy channel transposed by `xx` semitones.
- - **X**`xx` - send a Control Change message with the value `xx` to a control associated with the current channel (can also work with multiple controls if enabled, see below); this allows to control knobs of your external gear. 
- - **Y**`xx` - send a Program Change message which allows you to change the current patch of your synth.
+ - **N**`xx` — sends an arbitrary MIDI note `xx`.
+ - **Q**`xx` — sends a note corresponding to the pitch in the current Gameboy channel transposed by `xx` semitones.
+ - **X**`xx` — sends a Control Change message with the value `xx` to a control associated with the current channel (can also work with multiple controls if enabled, see below); this allows to control knobs of your external gear. 
+ - **Y**`xx` — sends a Program Change message which allows you to change the current patch of your synth.
 
 These commands are received by the dongle from the Gameboy Link port and the corresponding MIDI messages are generated on the MIDI out port of the dongle.
 
@@ -37,12 +37,24 @@ As mentioned above, Arduinoboy allows to change its configuration via special me
 
 The `Y6F` command is not treated as "Program Change to 111" but instructs LSDJmi to treat the following **X**`xx` commands as channel configuration changes:
 
- - **X**`mc` goes first and defines the MIDI channel associated with the current Gameboy channel (`c`), as well as how many CCs will be associated with it (`m`).
-   - `m` being 0 means that no changes in the current CC config will follow;
-   - `m` being 1 selects the 'single' CC mode with the following single **X**`xx` command defining the MIDI CC number;
-   - `m` from the range 2-7 selects the 'scaled' CC mode, and the following `m` **X**`xx` commands define the MIDI CC numbers to associate with the numbers in the high nibble of the regular LSDJ's CC command.
- - the next `m` **X**`cc` commands define MIDI CC numbers to use (depends on the mode, see above);
- - the last **X**`vv` command defines the default velocity of every note on this Gameboy channel (will be scaled from the commands 00-6F range to the MIDI's 00-7F).
+**X**`mc` goes first and defines how many CCs will be associated with the current Gameboy channel (`m`), as well as the MIDI channel to use for all the notes, CC and PC messages on this Gameboy channel. 
+ 
+When `m` is:
+
+- 0 — it means that no changes in the current CC config will follow;
+- 1 — it selects the 'single' CC mode with the following single **X**`xx` command defining the MIDI CC number;
+- 2-6 — it selects the 'scaled' CC mode, and the following `m` **X**`xx` commands define the MIDI CC numbers to use for as targets corresponding to the high nibble of the argument of the regular (i.e. outside of the config change sequence) **X** command.
+
+The last **X**`vv` command defines the default velocity of every note on this Gameboy channel (will be scaled from the commands 00-6F range to the MIDI's 00-7F).
+
+For example, you want to associate MIDI channel 3 with Gameboy's PU2 channel, treat all X commands on this channel as changing controller 43 (cutoff filter on KORG monologue) and use velocity 90 instead of 127 for all the notes you send, then you should execute the following sequence in the beginning of your song on PU2 channel:
+
+- `Y6F` — to enter the config mode;
+- `X12` — to use a single CC and MIDI channel 3 (2 in the command because we use zero-based numbers here);
+- `X2B` — the single CC to use (2B is 43 in hex);
+- `X4F` — the velocity we want (90 is from MIDI's 0-127 range, while we have 0-6F range here, so 0x4F will become 90 after scaling, i.e. 0x4F * 0x7F / 0x6F = 90).
+
+The configuration sequence ends after that. In case the sequence is incomplete, i.e. some more **X** commands are expected, then you'll see the LED being lit. If any other **Y** or note commands are received before the the config sequence is complete, then configuration stops.
 
 ## Schematics
 
