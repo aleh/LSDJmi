@@ -548,7 +548,6 @@ void setup() {
     // Alternatively you can manually find a suitable value and hardcode it.
     OSCCAL = 0xEF;
   }
-  OSCCAL = 0xEF;
     
   mi.begin();
 }
